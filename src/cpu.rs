@@ -218,7 +218,7 @@ impl<'a> CPU<'a> {
       0x15 => (1, CPU::dec_d),
       0x16 => (2, CPU::ld_d_n),
       0x17 => (1, CPU::rla),
-      0x18 => (5, CPU::jp_rn),
+      0x18 => (5, CPU::jr_n),
       0x19 => (2, CPU::add_hl_de),
       0x1A => (2, CPU::ld_a_mde),
       0x1B => (2, CPU::dec_de),
@@ -226,7 +226,7 @@ impl<'a> CPU<'a> {
       0x1D => (1, CPU::dec_e),
       0x1E => (2, CPU::ld_e_n),
       0x1F => (1, CPU::rra),
-      0x20 => (1, CPU::stop), // here
+      0x20 => (1, CPU::jr_nz_n), // here
       0x21 => (3, CPU::ld_de_nn),
       0x22 => (2, CPU::ld_mde_a),
       0x23 => (2, CPU::inc_de),
@@ -234,7 +234,7 @@ impl<'a> CPU<'a> {
       0x25 => (1, CPU::dec_d),
       0x26 => (2, CPU::ld_d_n),
       0x27 => (1, CPU::rla),
-      0x28 => (5, CPU::jp_rn),
+      0x28 => (5, CPU::jr_n),
       0x29 => (2, CPU::add_hl_de),
       0x2A => (2, CPU::ld_a_mde),
       0x2B => (2, CPU::dec_de),
@@ -415,7 +415,7 @@ impl<'a> CPU<'a> {
     self.set_a(res);
   }
 
-  fn jp_rn(&mut self) {
+  fn jr_n(&mut self) {
     let signed_int = self.read(self.pc);
     if signed_int > 127 {
       self.pc += (signed_int & 0x7F) as u16;
@@ -473,6 +473,128 @@ impl<'a> CPU<'a> {
     self.set_a(res);
   }
  
+  fn jr_nz_n(&mut self) {
+    let signed_int = self.read(self.pc);
+    self.pc += 1;
+    if self.get_flag(Flag::N) && self.get_flag(Flag::Z) {
+      if signed_int > 127 {
+        self.pc += (signed_int & 0x7F) as u16;
+      } else {
+        self.pc -= (signed_int & 0x7F) as u16;
+      }
+    }
+  }
+
+  fn ld_hl_nn(&mut self) {
+    self.set_l(self.read(self.pc));
+    self.pc += 1;
+    self.set_h(self.read(self.pc));
+    self.pc += 1;
+  }
+
+  fn ldi_mhl_a(&mut self) {
+    self.write(self.get_hl(), self.get_a());
+    self.set_hl(self.get_hl() + 1);
+  }
+
+  fn inc_hl(&mut self) {
+    self.set_hl(self.get_hl() + 1);
+  }
+
+  fn inc_h(&mut self) {
+    let is_half_carry = (((self.get_h() & 0xf) + (1 & 0xf)) & 0x10) != 0;
+    let res = self.get_h() + 1;
+    self.set_flag(Flag::Z, res == 0);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::H, is_half_carry);
+  }
+
+  fn dec_h(&mut self) {
+    let is_half_carry = (((self.get_h() & 0xf) - (1 & 0xf)) & 0x10) != 0;
+    let res = self.get_h() - 1;
+    self.set_flag(Flag::Z, res == 0);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::H, is_half_carry);
+  }
+
+  fn ld_h_n(&mut self) {
+    self.set_h(self.read(self.pc));
+    self.pc += 1;
+  }
+
+  fn daa(&mut self) {
+  // https://forums.nesdev.com/viewtopic.php?t=15944
+  // after an addition, adjust if (half-)carry occurred or if result is out of bounds
+    if !self.get_flag(Flag::N) {
+      if self.get_flag(Flag::C) || self.get_a() > 0x99 {
+        self.set_a(self.get_a() + 0x60);  
+        self.set_flag(Flag::C, true);
+      }
+      if self.get_flag(Flag::H) || (self.get_a() & 0x0F) > 0x09 {
+        self.set_a(self.get_a() + 0x6); 
+      }
+  // after a subtraction, only adjust if (half-)carry occurred
+    } else {
+      if self.get_flag(Flag::C) { self.set_a(self.get_a() - 0x60); }
+      if self.get_flag(Flag::H) { self.set_a(self.get_a() - 0x6); }
+    }
+  }
+
+  fn jr_z_n(&mut self) {
+    let signed_int = self.read(self.pc);
+    self.pc += 1;
+    if self.get_flag(Flag::Z) {
+      if signed_int > 127 {
+        self.pc += (signed_int & 0x7F) as u16;
+      } else {
+        self.pc -= (signed_int & 0x7F) as u16;
+      }
+    }
+  }
+
+  fn add_hl_hl(&mut self) {
+    let res = self.get_hl() + self.get_hl(); 
+    let is_half_carry = (((self.get_hl() & 0xFFF) + (self.get_hl() & 0xFFF)) & 0x1000) != 0; 
+    self.set_flag(Flag::C, res > 0xFFFF);
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, false);
+  }
+
+  fn ldi_a_mhl(&mut self) {
+    self.set_a(self.read(self.get_hl()));
+    self.set_hl(self.get_hl() + 1);
+  }
+
+  fn dec_hl(&mut self) {
+    self.set_hl(self.get_hl() - 1);
+  }
+
+  fn inc_l(&mut self) {
+    let is_half_carry = (((self.get_l() & 0xf) + (1 & 0xf)) & 0x10) != 0;
+    let res = self.get_l() + 1;
+    self.set_flag(Flag::Z, res == 0);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::H, is_half_carry);
+  }
+
+  fn dec_l(&mut self) {
+    let is_half_carry = (((self.get_l() & 0xf) - (1 & 0xf)) & 0x10) != 0;
+    let res = self.get_l() - 1;
+    self.set_flag(Flag::Z, res == 0);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::H, is_half_carry);
+  }
+
+  fn ld_l_n(&mut self) {
+    self.set_l(self.read(self.pc));
+    self.pc += 1;
+  }
+
+  fn cpl(&mut self) {
+    self.set_a(!self.get_a());
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::H, true);
+  }
 }
 
 fn msb(d: u16) -> u8 {
