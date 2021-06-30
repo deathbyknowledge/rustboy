@@ -1,26 +1,25 @@
+#[allow(dead_code)]
 use std::env::args;
 use std::io::prelude::*;
 use std::fs::File;
 
 mod display;
 mod cpu;
+mod bus;
 use display::Display;
 use cpu::CPU;
+use bus::Bus;
 
-struct Gameboy {
- cpu: CPU,
- wram: [u8; 8196],
- vram: [u8; 8196],
+struct Gameboy<'a> {
+ cpu: CPU<'a>,
  display: Display,
  game: Vec<u8>,
 }
 
-impl Gameboy {
+impl Gameboy<'_> {
   fn new() -> Self {
     Gameboy { 
       cpu: CPU::new(),
-      wram: [0; 8196],
-      vram: [0; 8196],
       display: Display::new(),
       game: Vec::new(),
     }
@@ -52,8 +51,12 @@ impl Gameboy {
 
   fn start(&mut self) {
     while let Some(e) = self.display.poll() {
+      // FETCH, DEOCDE, EXECUTE
       let opcode = self.cpu.fetch();
-      self.cpu.execute(opcode);
+      let (duration, op) = self.cpu.decode(opcode);
+      println!("current op duration: {}", duration);
+      op(&mut self.cpu);
+
    		self.display.refresh(&e); 
     }
   }
@@ -66,6 +69,10 @@ fn main() {
   f.read_to_end(&mut gb.game).unwrap();
 
   gb.boot_game();
+
+  let mut bus = Bus::new();
+  gb.cpu.connect_bus(&mut bus);
+
   gb.start();
 }
 
