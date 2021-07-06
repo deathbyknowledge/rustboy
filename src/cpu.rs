@@ -1,7 +1,7 @@
 use crate::bus::Bus;
 
 pub struct CPU<'a> {
-  // Registers
+ // Registers
   af: [u8; 2],
   bcdehl: [u8; 6],
   sp: u16,
@@ -319,6 +319,38 @@ impl<'a> CPU<'a> {
       0x8D => (1, CPU::adc_a_l),
       0x8E => (2, CPU::adc_a_mhl),
       0x8F => (1, CPU::adc_a_a),
+      0x90 => (1, CPU::sub_a_b),
+      0x91 => (1, CPU::sub_a_c),
+      0x92 => (1, CPU::sub_a_d),
+      0x93 => (1, CPU::sub_a_e),
+      0x94 => (1, CPU::sub_a_h),
+      0x95 => (1, CPU::sub_a_l),
+      0x96 => (2, CPU::sub_a_mhl),
+      0x97 => (1, CPU::sub_a_a),
+      0x98 => (1, CPU::sbc_a_b),
+      0x99 => (1, CPU::sbc_a_c),
+      0x9A => (1, CPU::sbc_a_d),
+      0x9B => (1, CPU::sbc_a_e),
+      0x9C => (1, CPU::sbc_a_h),
+      0x9D => (1, CPU::sbc_a_l),
+      0x9E => (2, CPU::sbc_a_mhl),
+      0x9F => (1, CPU::sbc_a_a),
+      0xA0 => (1, CPU::and_a_b),
+      0xA1 => (1, CPU::and_a_c),
+      0xA2 => (1, CPU::and_a_d),
+      0xA3 => (1, CPU::and_a_e),
+      0xA4 => (1, CPU::and_a_h),
+      0xA5 => (1, CPU::and_a_l),
+      0xA6 => (2, CPU::and_a_mhl),
+      0xA7 => (1, CPU::and_a_a),
+      0xA8 => (1, CPU::xor_a_b),
+      0xA9 => (1, CPU::xor_a_c),
+      0xAA => (1, CPU::xor_a_d),
+      0xAB => (1, CPU::xor_a_e),
+      0xAC => (1, CPU::xor_a_h),
+      0xAD => (1, CPU::xor_a_l),
+      0xAE => (2, CPU::xor_a_mhl),
+      0xAF => (1, CPU::xor_a_a),
       _ => (1, CPU::nop),
     }
   }
@@ -1142,7 +1174,7 @@ impl<'a> CPU<'a> {
 
   fn adc_a_b(&mut self) {
     let mut total = (self.get_a() + self.get_b()) as u16;
-    if self.get_flag(Flag::Z) { total += 1 }
+    if self.get_flag(Flag::C) { total += 1 }
     let res = (total & 0xFF) as u8;
     let is_half_carry = (((self.get_a() & 0xf) + (self.get_b() & 0xf)) & 0x10) != 0;
     self.set_flag(Flag::C, total > 0xFF); 
@@ -1154,7 +1186,7 @@ impl<'a> CPU<'a> {
   
   fn adc_a_c(&mut self) {
     let mut total = (self.get_a() + self.get_c()) as u16;
-    if self.get_flag(Flag::Z) { total += 1 }
+    if self.get_flag(Flag::C) { total += 1 }
     let res = (total & 0xFF) as u8;
     let is_half_carry = (((self.get_a() & 0xf) + (self.get_c() & 0xf)) & 0x10) != 0;
     self.set_flag(Flag::C, total > 0xFF); 
@@ -1166,7 +1198,7 @@ impl<'a> CPU<'a> {
   
   fn adc_a_d(&mut self) {
     let mut total = (self.get_a() + self.get_d()) as u16;
-    if self.get_flag(Flag::Z) { total += 1 }
+    if self.get_flag(Flag::C) { total += 1 }
     let res = (total & 0xFF) as u8;
     let is_half_carry = (((self.get_a() & 0xf) + (self.get_d() & 0xf)) & 0x10) != 0;
     self.set_flag(Flag::C, total > 0xFF); 
@@ -1178,7 +1210,7 @@ impl<'a> CPU<'a> {
   
   fn adc_a_e(&mut self) {
     let mut total = (self.get_a() + self.get_e()) as u16;
-    if self.get_flag(Flag::Z) { total += 1 }
+    if self.get_flag(Flag::C) { total += 1 }
     let res = (total & 0xFF) as u8;
     let is_half_carry = (((self.get_a() & 0xf) + (self.get_e() & 0xf)) & 0x10) != 0;
     self.set_flag(Flag::C, total > 0xFF); 
@@ -1190,7 +1222,7 @@ impl<'a> CPU<'a> {
   
   fn adc_a_h(&mut self) {
     let mut total = (self.get_a() + self.get_h()) as u16;
-    if self.get_flag(Flag::Z) { total += 1 }
+    if self.get_flag(Flag::C) { total += 1 }
     let res = (total & 0xFF) as u8;
     let is_half_carry = (((self.get_a() & 0xf) + (self.get_h() & 0xf)) & 0x10) != 0;
     self.set_flag(Flag::C, total > 0xFF); 
@@ -1201,7 +1233,8 @@ impl<'a> CPU<'a> {
   }
   
   fn adc_a_l(&mut self) {
-    let total = (self.get_a() + self.get_l()) as u16;
+    let mut total = (self.get_a() + self.get_l()) as u16;
+    if self.get_flag(Flag::C) { total += 1 }
     let res = (total & 0xFF) as u8;
     let is_half_carry = (((self.get_a() & 0xf) + (self.get_l() & 0xf)) & 0x10) != 0;
     self.set_flag(Flag::C, total > 0xFF); 
@@ -1214,7 +1247,7 @@ impl<'a> CPU<'a> {
   fn adc_a_mhl(&mut self) {
     let byte = self.read(self.get_hl());
     let mut total = (self.get_a() + byte) as u16;
-    if self.get_flag(Flag::Z) { total += 1 }
+    if self.get_flag(Flag::C) { total += 1 }
     let res = (total & 0xFF) as u8;
     let is_half_carry = (((self.get_a() & 0xf) + (byte & 0xf)) & 0x10) != 0;
     self.set_flag(Flag::C, total > 0xFF); 
@@ -1226,13 +1259,388 @@ impl<'a> CPU<'a> {
   
   fn adc_a_a(&mut self) {
     let mut total = (self.get_a() + self.get_a()) as u16;
-    if self.get_flag(Flag::Z) { total += 1 }
+    if self.get_flag(Flag::C) { total += 1 }
     let res = (total & 0xFF) as u8;
     let is_half_carry = (((self.get_a() & 0xf) + (self.get_a() & 0xf)) & 0x10) != 0;
     self.set_flag(Flag::C, total > 0xFF); 
     self.set_flag(Flag::H, is_half_carry);
     self.set_flag(Flag::N, false);
     self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn sub_a_b(&mut self) {
+    let total = (self.get_a() - self.get_b()) as u16;
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_b() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sub_a_c(&mut self) {
+    let total = (self.get_a() - self.get_c()) as u16;
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_c() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sub_a_d(&mut self) {
+    let total = (self.get_a() - self.get_d()) as u16;
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_d() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sub_a_e(&mut self) {
+    let total = (self.get_a() - self.get_e()) as u16;
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_e() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sub_a_h(&mut self) {
+    let total = (self.get_a() - self.get_h()) as u16;
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) + (self.get_h() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sub_a_l(&mut self) {
+    let total = (self.get_a() - self.get_l()) as u16;
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_l() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn sub_a_mhl(&mut self) {
+    let byte = self.read(self.get_hl());
+    let total = (self.get_a() - byte) as u16;
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (byte & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sub_a_a(&mut self) {
+    self.set_flag(Flag::C, false); 
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, true);
+    self.set_a(0);
+  }
+
+  fn sbc_a_b(&mut self) {
+    let mut total = (self.get_a() - self.get_b()) as u16;
+    if self.get_flag(Flag::C) { 
+      if total == 0 {
+        total = 0xFF; // Wrap around. 0x00 - 1 --> 0xFF
+      } else {
+        total -= 1;
+      }
+    }
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_b() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sbc_a_c(&mut self) {
+    let mut total = (self.get_a() - self.get_c()) as u16;
+    if self.get_flag(Flag::C) { 
+      if total == 0 {
+        total = 0xFF; // Wrap around. 0x00 - 1 --> 0xFF
+      } else {
+        total -= 1;
+      }
+    }
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_c() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sbc_a_d(&mut self) {
+    let mut total = (self.get_a() - self.get_d()) as u16;
+    if self.get_flag(Flag::C) { 
+      if total == 0 {
+        total = 0xFF; // Wrap around. 0x00 - 1 --> 0xFF
+      } else {
+        total -= 1;
+      }
+    }
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_d() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sbc_a_e(&mut self) {
+    let mut total = (self.get_a() - self.get_e()) as u16;
+    if self.get_flag(Flag::C) { 
+      if total == 0 {
+        total = 0xFF; // Wrap around. 0x00 - 1 --> 0xFF
+      } else {
+        total -= 1;
+      }
+    }
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_e() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sbc_a_h(&mut self) {
+    let mut total = (self.get_a() - self.get_h()) as u16;
+    if self.get_flag(Flag::C) { 
+      if total == 0 {
+        total = 0xFF; // Wrap around. 0x00 - 1 --> 0xFF
+      } else {
+        total -= 1;
+      }
+    }
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_h() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sbc_a_l(&mut self) {
+    let mut total = (self.get_a() - self.get_l()) as u16;
+    if self.get_flag(Flag::C) {
+      if total == 0 {
+        total = 0xFF; // Wrap around. 0x00 - 1 --> 0xFF
+      } else {
+        total -= 1;
+      }
+    }
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_l() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn sbc_a_mhl(&mut self) {
+    let byte = self.read(self.get_hl());
+    let mut total = (self.get_a() - byte) as u16;
+    if self.get_flag(Flag::C) {
+      if total == 0 {
+        total = 0xFF; // Wrap around. 0x00 - 1 --> 0xFF
+      } else {
+        total -= 1;
+      }
+    }
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (byte & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+  
+  fn sbc_a_a(&mut self) {
+    let mut total = (self.get_a() - self.get_a()) as u16;
+    if self.get_flag(Flag::C) {
+      if total == 0 {
+        total = 0xFF; // Wrap around. 0x00 - 1 --> 0xFF
+      } else {
+        total -= 1;
+      }
+    }
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_a() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn and_a_b(&mut self) {
+    let res = self.get_a() & self.get_b();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, true);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn and_a_c(&mut self) {
+    let res = self.get_a() & self.get_c();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, true);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn and_a_d(&mut self) {
+    let res = self.get_a() & self.get_d();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, true);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn and_a_e(&mut self) {
+    let res = self.get_a() & self.get_e();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, true);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn and_a_h(&mut self) {
+    let res = self.get_a() & self.get_h();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, true);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn and_a_l(&mut self) {
+    let res = self.get_a() & self.get_l();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, true);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn and_a_mhl(&mut self) {
+    let res = self.get_a() & self.get_b();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, true);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn and_a_a(&mut self) {
+    let res = self.get_a() & self.get_a();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, true);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn xor_a_b(&mut self) {
+    let res = self.get_a() ^ self.get_b();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn xor_a_c(&mut self) {
+    let res = self.get_a() ^ self.get_c();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn xor_a_d(&mut self) {
+    let res = self.get_a() ^ self.get_d();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn xor_a_e(&mut self) {
+    let res = self.get_a() ^ self.get_e();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn xor_a_h(&mut self) {
+    let res = self.get_a() ^ self.get_h();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn xor_a_l(&mut self) {
+    let res = self.get_a() ^ self.get_l();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn xor_a_mhl(&mut self) {
+    let res = self.get_a() ^ self.read(self.get_hl());
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn xor_a_a(&mut self) {
+    let res = self.get_a() ^ self.get_a();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, true);
     self.set_a(res);
   }
 }
