@@ -351,6 +351,22 @@ impl<'a> CPU<'a> {
       0xAD => (1, CPU::xor_a_l),
       0xAE => (2, CPU::xor_a_mhl),
       0xAF => (1, CPU::xor_a_a),
+      0xB0 => (1, CPU::or_a_b),
+      0xB1 => (1, CPU::or_a_c),
+      0xB2 => (1, CPU::or_a_d),
+      0xB3 => (1, CPU::or_a_e),
+      0xB4 => (1, CPU::or_a_h),
+      0xB5 => (1, CPU::or_a_l),
+      0xB6 => (2, CPU::or_a_mhl),
+      0xB7 => (1, CPU::or_a_a),
+      0xB8 => (1, CPU::cp_a_b),
+      0xB9 => (1, CPU::cp_a_c),
+      0xBA => (1, CPU::cp_a_d),
+      0xBB => (1, CPU::cp_a_e),
+      0xBC => (1, CPU::cp_a_h),
+      0xBD => (1, CPU::cp_a_l),
+      0xBE => (2, CPU::cp_a_mhl),
+      0xBF => (1, CPU::cp_a_a),
       _ => (1, CPU::nop),
     }
   }
@@ -1642,6 +1658,142 @@ impl<'a> CPU<'a> {
     self.set_flag(Flag::N, false);
     self.set_flag(Flag::Z, true);
     self.set_a(res);
+  }
+
+  fn or_a_b(&mut self) {
+    let res = self.get_a() | self.get_b();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn or_a_c(&mut self) {
+    let res = self.get_a() | self.get_c();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn or_a_d(&mut self) {
+    let res = self.get_a() | self.get_d();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn or_a_e(&mut self) {
+    let res = self.get_a() | self.get_e();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn or_a_h(&mut self) {
+    let res = self.get_a() | self.get_h();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn or_a_l(&mut self) {
+    let res = self.get_a() | self.get_l();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn or_a_mhl(&mut self) {
+    let res = self.get_a() | self.read(self.get_hl());
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn or_a_a(&mut self) {
+    let res = self.get_a() | self.get_a();
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn cp_a_b(&mut self) {
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_b() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, self.get_a() < self.get_b());
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, self.get_a() == self.get_b());
+  }
+
+  fn cp_a_c(&mut self) {
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_c() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, self.get_a() < self.get_c());
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, self.get_a() == self.get_c());
+  }
+
+  fn cp_a_d(&mut self) {
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_d() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, self.get_a() < self.get_d());
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, self.get_a() == self.get_d());
+  }
+
+  fn cp_a_e(&mut self) {
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_e() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, self.get_a() < self.get_e());
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, self.get_a() == self.get_e());
+  }
+
+  fn cp_a_h(&mut self) {
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_h() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, self.get_a() < self.get_h());
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, self.get_a() == self.get_h());
+  }
+
+  fn cp_a_l(&mut self) {
+    let is_half_carry = (((self.get_a() & 0xf) - (self.get_l() & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, self.get_a() < self.get_l());
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, self.get_a() == self.get_l());
+  }
+
+  fn cp_a_mhl(&mut self) {
+    let byte = self.read(self.get_hl());
+    let is_half_carry = (((self.get_a() & 0xf) - (byte & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, self.get_a() < byte);
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, self.get_a() == byte);
+  }
+
+  fn cp_a_a(&mut self) {
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, true);
   }
 }
 
