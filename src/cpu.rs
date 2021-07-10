@@ -7,6 +7,8 @@ pub struct CPU<'a> {
   sp: u16,
   pc: u16,
 
+  ime: bool,
+
   // Data BUS
   bus: Option<&'a mut Bus>,
 }
@@ -26,6 +28,7 @@ impl<'a> CPU<'a> {
           sp: 0xFFFE,
           pc: 0,
           bus: None,
+          ime: false,
         }
   }
 
@@ -50,6 +53,10 @@ impl<'a> CPU<'a> {
   // REGISTER GETTERS
   fn get_a(&self) -> u8 {
     self.af[0]
+  }
+
+  fn get_f(&self) -> u8 {
+    self.af[1]
   }
 
   fn get_b(&self) -> u8 {
@@ -102,6 +109,10 @@ impl<'a> CPU<'a> {
     self.af[0] = d;
   }
 
+  fn set_f(&mut self, d: u8) {
+    self.af[1] = d;
+  }
+
   fn set_b(&mut self, d: u8) {
     self.bcdehl[0] = d;
   }
@@ -145,6 +156,13 @@ impl<'a> CPU<'a> {
     let lo = (d << 8) as u8;
     self.set_h(hi);
     self.set_l(lo);
+  }
+
+  fn set_af(&mut self, d: u16) {
+    let hi = (d >> 8) as u8;
+    let lo = (d << 8) as u8;
+    self.set_a(hi);
+    self.set_f(lo);
   }
 
   pub fn read(&self, a: u16) -> u8 {
@@ -367,7 +385,70 @@ impl<'a> CPU<'a> {
       0xBD => (1, CPU::cp_a_l),
       0xBE => (2, CPU::cp_a_mhl),
       0xBF => (1, CPU::cp_a_a),
-      _ => (1, CPU::nop),
+      0xC0 => (5, CPU::ret_nz),
+      0xC1 => (3, CPU::pop_bc),
+      0xC2 => (4, CPU::jp_nz_nn),
+      0xC3 => (4, CPU::jp_nn),
+      0xC4 => (6, CPU::call_nz_nn),
+      0xC5 => (4, CPU::push_bc),
+      0xC6 => (2, CPU::add_a_n),
+      0xC7 => (4, CPU::rst_00),
+      0xC8 => (5, CPU::ret_z),
+      0xC9 => (4, CPU::ret),
+      0xCA => (4, CPU::jp_z_nn),
+      0xCB => (1, CPU::prefix),
+      0xCC => (6, CPU::call_z_nn),
+      0xCD => (6, CPU::call_nn),
+      0xCE => (2, CPU::adc_a_n),
+      0xCF => (4, CPU::rst_08),
+      0xD0 => (5, CPU::ret_nc),
+      0xD1 => (3, CPU::pop_de),
+      0xD2 => (4, CPU::jp_nc_nn),
+      0xD3 => (0, CPU::unimplemented),
+      0xD4 => (6, CPU::call_nc_nn),
+      0xD5 => (4, CPU::push_de),
+      0xD6 => (2, CPU::sub_a_n),
+      0xD7 => (4, CPU::rst_10),
+      0xD8 => (5, CPU::ret_c),
+      0xD9 => (4, CPU::reti),
+      0xDA => (4, CPU::jp_c_nn),
+      0xDB => (1, CPU::unimplemented),
+      0xDC => (6, CPU::call_c_nn),
+      0xDD => (6, CPU::unimplemented),
+      0xDE => (2, CPU::sbc_a_n),
+      0xDF => (4, CPU::rst_18),
+      0xE0 => (3, CPU::ldh_n_a),
+      0xE1 => (3, CPU::pop_hl),
+      0xE2 => (2, CPU::ld_mc_a),
+      0xE3 => (0, CPU::unimplemented),
+      0xE4 => (0, CPU::unimplemented),
+      0xE5 => (4, CPU::push_hl),
+      0xE6 => (2, CPU::and_a_n),
+      0xE7 => (4, CPU::rst_20),
+      0xE8 => (4, CPU::add_sp_rn),
+      0xE9 => (1, CPU::jp_hl),
+      0xEA => (4, CPU::ld_mnn_a),
+      0xEB => (0, CPU::unimplemented),
+      0xEC => (0, CPU::unimplemented),
+      0xED => (0, CPU::unimplemented),
+      0xEE => (2, CPU::xor_a_n),
+      0xEF => (4, CPU::rst_28),
+      0xF0 => (3, CPU::ldh_a_n),
+      0xF1 => (3, CPU::pop_af),
+      0xF2 => (2, CPU::ld_a_mc),
+      0xF3 => (1, CPU::di),
+      0xF4 => (0, CPU::unimplemented),
+      0xF5 => (4, CPU::push_af),
+      0xF6 => (2, CPU::or_a_n),
+      0xF7 => (4, CPU::rst_30),
+      0xF8 => (3, CPU::ld_hl_sprn),
+      0xF9 => (2, CPU::ld_sp_hl),
+      0xFA => (4, CPU::ld_a_mnn),
+      0xFB => (1, CPU::ei),
+      0xFC => (0, CPU::unimplemented),
+      0xFD => (0, CPU::unimplemented),
+      0xFE => (2, CPU::cp_a_n),
+      0xFF => (4, CPU::rst_38),
     }
   }
 
@@ -377,6 +458,10 @@ impl<'a> CPU<'a> {
     INSTRUCTION SET
   -------------------
   */
+
+  fn unimplemented(&mut self) {
+    println!("unimplemented opcode");
+  }
 
   fn nop(&mut self) {}
 
@@ -401,19 +486,29 @@ impl<'a> CPU<'a> {
     self.set_flag(Flag::Z, res == 0);
     self.set_flag(Flag::N, false);
     self.set_flag(Flag::H, is_half_carry);
+    self.set_b(res);
   }
 
   fn dec_b(&mut self) {
-    let is_half_carry = (((self.get_b() & 0xf) - (1 & 0xf)) & 0x10) != 0;
-    let res = self.get_b() - 1;
-    self.set_flag(Flag::Z, res == 0);
-    self.set_flag(Flag::N, false);
-    self.set_flag(Flag::H, is_half_carry);
+    if self.get_b() == 0 {
+      self.set_b(0xFF);
+      self.set_flag(Flag::Z, false);
+      self.set_flag(Flag::N, false);
+      self.set_flag(Flag::H, false);
+    } else {
+      let is_half_carry = (((self.get_b() & 0xf) - (1 & 0xf)) & 0x10) != 0;
+      let res = self.get_b() - 1;
+      self.set_flag(Flag::Z, res == 0);
+      self.set_flag(Flag::N, false);
+      self.set_flag(Flag::H, is_half_carry);
+      self.set_b(res);
+    }
   }
 
   fn ld_b_n(&mut self) {
     self.set_b(self.read(self.pc));
     self.pc += 1;
+    println!("b set to {}", self.get_b());
   }
 
   fn rlca(&mut self) {
@@ -467,11 +562,19 @@ impl<'a> CPU<'a> {
   }
 
   fn dec_c(&mut self) {
-    let is_half_carry = (((self.get_c() & 0xf) - (1 & 0xf)) & 0x10) != 0;
-    let res = self.get_c() - 1;
-    self.set_flag(Flag::Z, res == 0);
-    self.set_flag(Flag::N, false);
-    self.set_flag(Flag::H, is_half_carry);
+    if self.get_c() == 0 {
+      self.set_c(0xFF);
+      self.set_flag(Flag::Z, false);
+      self.set_flag(Flag::N, false);
+      self.set_flag(Flag::H, false);
+    } else {
+      let is_half_carry = (((self.get_c() & 0xf) - (1 & 0xf)) & 0x10) != 0;
+      let res = self.get_c() - 1;
+      self.set_flag(Flag::Z, res == 0);
+      self.set_flag(Flag::N, false);
+      self.set_flag(Flag::H, is_half_carry);
+      self.set_c(res);
+    }
   }
 
   fn ld_c_n(&mut self) {
@@ -518,11 +621,19 @@ impl<'a> CPU<'a> {
   }
 
   fn dec_d(&mut self) {
-    let is_half_carry = (((self.get_d() & 0xf) - (1 & 0xf)) & 0x10) != 0;
-    let res = self.get_d() - 1;
-    self.set_flag(Flag::Z, res == 0);
-    self.set_flag(Flag::N, false);
-    self.set_flag(Flag::H, is_half_carry);
+    if self.get_d() == 0 {
+      self.set_d(0xFF);
+      self.set_flag(Flag::Z, false);
+      self.set_flag(Flag::N, false);
+      self.set_flag(Flag::H, false);
+    } else {
+      let is_half_carry = (((self.get_d() & 0xf) - (1 & 0xf)) & 0x10) != 0;
+      let res = self.get_d() - 1;
+      self.set_flag(Flag::Z, res == 0);
+      self.set_flag(Flag::N, false);
+      self.set_flag(Flag::H, is_half_carry);
+      self.set_d(res);
+    }
   }
 
   fn ld_d_n(&mut self) {
@@ -605,7 +716,7 @@ impl<'a> CPU<'a> {
   fn jr_nz_n(&mut self) {
     let signed_int = self.read(self.pc);
     self.pc += 1;
-    if self.get_flag(Flag::N) && self.get_flag(Flag::Z) {
+    if !self.get_flag(Flag::Z) {
       if signed_int > 127 {
         self.pc += (signed_int & 0x7F) as u16;
       } else {
@@ -1571,7 +1682,8 @@ impl<'a> CPU<'a> {
   }
 
   fn and_a_mhl(&mut self) {
-    let res = self.get_a() & self.get_b();
+    let byte = self.read(self.get_hl());
+    let res = self.get_a() & byte;
     self.set_flag(Flag::C, false);
     self.set_flag(Flag::H, true);
     self.set_flag(Flag::N, false);
@@ -1794,6 +1906,521 @@ impl<'a> CPU<'a> {
     self.set_flag(Flag::H, false);
     self.set_flag(Flag::N, true);
     self.set_flag(Flag::Z, true);
+  }
+  
+  fn ret_nz(&mut self) {
+    if !self.get_flag(Flag::Z) {
+      let lo = self.read(self.sp) as u16;
+      self.sp += 1;
+      let hi = self.read(self.sp) as u16;
+      self.sp += 1;
+      let nn = (hi << 8) + lo;
+      self.pc = nn;
+    }
+  }
+
+  fn pop_bc(&mut self) {
+    let lo = self.read(self.sp) as u16;
+    self.sp += 1;
+    let hi = self.read(self.sp) as u16;
+    self.sp += 1;
+    let nn = (hi << 8) + lo;
+    self.set_bc(nn);
+  }
+
+  fn jp_nz_nn(&mut self) {
+    let lo = self.read(self.pc);
+    self.pc += 1;
+    let hi = self.read(self.pc);
+    self.pc += 1;
+    if !self.get_flag(Flag::Z) {
+      self.pc = (hi << 8 + lo) as u16;
+    }
+  }
+
+  fn jp_nn(&mut self) {
+    let lo = self.read(self.pc) as u16;
+    self.pc += 1;
+    let hi = self.read(self.pc) as u16;
+    self.pc += 1;
+    let nn = (hi << 8) + lo;
+    self.pc = nn;
+  }
+
+  fn call_nz_nn(&mut self) {
+    let lo = self.read(self.pc) as u16;
+    self.pc += 1;
+    let hi = self.read(self.pc) as u16;
+    self.pc += 1;
+    let nn = (hi << 8) + lo;
+    if !self.get_flag(Flag::Z) {
+      self.pc = nn;
+      self.sp -= 1;
+      self.write(self.sp, hi as u8);
+      self.sp -= 1;
+      self.write(self.sp, lo as u8);
+      self.pc = nn;
+    }
+  }
+
+  fn push_bc(&mut self) {
+    self.sp -= 1;
+    self.write(self.sp, self.get_b());
+    self.sp -= 1;
+    self.write(self.sp, self.get_c());
+  }
+
+  fn add_a_n(&mut self) {
+    let byte = self.read(self.pc);
+    self.pc += 1;
+    let res = (self.get_a() + byte) as u16;
+    let is_half_carry = (((self.get_a() & 0xf) + (byte & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, res > 0xFF);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::C, res == 0);
+  }
+
+  fn rst_00(&mut self) {
+    self.sp -= 1;
+    let hi = (self.pc >> 8) as u8;
+    let lo = (self.pc & 0xFF) as u8;
+    self.write(self.sp, hi);
+    self.sp -= 1;
+    self.write(self.sp, lo);
+    self.pc = 0x00 as u16;
+  }
+
+  fn ret_z(&mut self) {
+    if self.get_flag(Flag::Z) {
+      let lo = self.read(self.sp) as u16;
+      self.sp += 1;
+      let hi = self.read(self.sp) as u16;
+      self.sp += 1;
+      let nn = (hi << 8) + lo;
+      self.pc = nn;
+    }
+  }
+
+  fn ret(&mut self) {
+    let lo = self.read(self.sp) as u16;
+    self.sp += 1;
+    let hi = self.read(self.sp) as u16;
+    self.sp += 1;
+    let nn = (hi << 8) + lo;
+    self.pc = nn;
+  }
+
+  fn jp_z_nn(&mut self) {
+    let lo = self.read(self.pc);
+    self.pc += 1;
+    let hi = self.read(self.pc);
+    self.pc += 1;
+    if self.get_flag(Flag::Z) {
+      self.pc = (hi << 8 + lo) as u16;
+    }
+  }
+
+  fn prefix(&mut self) {
+    println!("prefix");
+  }
+
+  fn call_z_nn(&mut self) {
+    let lo = self.read(self.pc) as u16;
+    self.pc += 1;
+    let hi = self.read(self.pc) as u16;
+    self.pc += 1;
+    let nn = (hi << 8) + lo;
+    if self.get_flag(Flag::Z) {
+      self.pc = nn;
+      self.sp -= 1;
+      self.write(self.sp, hi as u8);
+      self.sp -= 1;
+      self.write(self.sp, lo as u8);
+      self.pc = nn;
+    }
+  }
+
+  fn call_nn(&mut self) {
+    let lo = self.read(self.pc) as u16;
+    self.pc += 1;
+    let hi = self.read(self.pc) as u16;
+    let nn = ((hi << 8) + lo) as u16;
+    self.pc += 1;
+    self.pc = nn;
+    self.sp -= 1;
+    self.write(self.sp, hi as u8);
+    self.sp -= 1;
+    self.write(self.sp, lo as u8);
+    self.pc = nn;
+  }
+
+  fn adc_a_n(&mut self) {
+    let byte = self.read(self.pc);
+    self.pc += 1;
+    let mut total = (self.get_a() + byte) as u16;
+    if self.get_flag(Flag::C) { total += 1 }
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) + (byte & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn rst_08(&mut self) {
+    self.sp -= 1;
+    let hi = (self.pc >> 8) as u8;
+    let lo = (self.pc & 0xFF) as u8;
+    self.write(self.sp, hi);
+    self.sp -= 1;
+    self.write(self.sp, lo);
+    self.pc = 0x08 as u16;
+  }
+
+  fn ret_nc(&mut self) {
+    if !self.get_flag(Flag::C) {
+      let lo = self.read(self.sp) as u16;
+      self.sp += 1;
+      let hi = self.read(self.sp) as u16;
+      self.sp += 1;
+      let nn = (hi << 8) + lo;
+      self.pc = nn;
+    }
+  }
+
+  fn pop_de(&mut self) {
+    let lo = self.read(self.sp) as u16;
+    self.sp += 1;
+    let hi = self.read(self.sp) as u16;
+    self.sp += 1;
+    let nn = (hi << 8) + lo;
+    self.set_de(nn);
+  }
+
+  fn jp_nc_nn(&mut self) {
+    let lo = self.read(self.pc) as u16;
+    self.pc += 1;
+    let hi = self.read(self.pc) as u16;
+    self.pc += 1;
+    if !self.get_flag(Flag::C) {
+      self.pc = (hi << 8) + lo;
+    }
+  }
+
+  fn call_nc_nn(&mut self) {
+    let lo = self.read(self.pc) as u16;
+    self.pc += 1;
+    let hi = self.read(self.pc) as u16;
+    self.pc += 1;
+    let nn = (hi << 8) + lo;
+    if !self.get_flag(Flag::C) {
+      self.pc = nn;
+      self.sp -= 1;
+      self.write(self.sp, hi as u8);
+      self.sp -= 1;
+      self.write(self.sp, lo as u8);
+      self.pc = nn;
+    }
+  }
+
+  fn push_de(&mut self) {
+    self.sp -= 1;
+    self.write(self.sp, self.get_d());
+    self.sp -= 1;
+    self.write(self.sp, self.get_e());
+  }
+
+  fn sub_a_n(&mut self) {
+    let byte = self.read(self.pc);
+    self.pc += 1;
+    let total = (self.get_a() - byte) as u16;
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (byte & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, self.get_a() < byte); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn rst_10(&mut self) {
+    self.sp -= 1;
+    let hi = (self.pc >> 8) as u8;
+    let lo = (self.pc & 0xFF) as u8;
+    self.write(self.sp, hi);
+    self.sp -= 1;
+    self.write(self.sp, lo);
+    self.pc = 0x10 as u16;
+  }
+
+  fn ret_c(&mut self) {
+    if self.get_flag(Flag::C) {
+      let lo = self.read(self.sp) as u16;
+      self.sp += 1;
+      let hi = self.read(self.sp) as u16;
+      self.sp += 1;
+      let nn = (hi << 8) + lo;
+      self.pc = nn;
+    }
+  }
+
+  fn reti(&mut self) {
+    let lo = self.read(self.sp) as u16;
+    self.sp += 1;
+    let hi = self.read(self.sp) as u16;
+    self.sp += 1;
+    let nn = (hi << 8) + lo;
+    self.pc = nn;
+    self.ime = true;
+  }
+
+  fn jp_c_nn(&mut self) {
+    let lo = self.read(self.pc);
+    self.pc += 1;
+    let hi = self.read(self.pc);
+    self.pc += 1;
+    if self.get_flag(Flag::C) {
+      self.pc = (hi << 8 + lo) as u16;
+    }
+  }
+
+  fn call_c_nn(&mut self) {
+    let lo = self.read(self.pc) as u16;
+    self.pc += 1;
+    let hi = self.read(self.pc) as u16;
+    self.pc += 1;
+    let nn = (hi << 8) + lo;
+    if self.get_flag(Flag::C) {
+      self.pc = nn;
+      self.sp -= 1;
+      self.write(self.sp, hi as u8);
+      self.sp -= 1;
+      self.write(self.sp, lo as u8);
+      self.pc = nn;
+    }
+  }
+
+  fn sbc_a_n(&mut self) {
+    let byte = self.read(self.pc);
+    self.pc += 1;
+    let mut total = (self.get_a() - byte) as u16;
+    if self.get_flag(Flag::C) {
+      if total == 0 {
+        total = 0xFF; // Wrap around. 0x00 - 1 --> 0xFF
+      } else {
+        total -= 1;
+      }
+    }
+    let res = (total & 0xFF) as u8;
+    let is_half_carry = (((self.get_a() & 0xf) - (byte & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, total > 0xFF); 
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn rst_18(&mut self) {
+    self.sp -= 1;
+    let hi = (self.pc >> 8) as u8;
+    let lo = (self.pc & 0xFF) as u8;
+    self.write(self.sp, hi);
+    self.sp -= 1;
+    self.write(self.sp, lo);
+    self.pc = 0x18 as u16;
+  }
+
+  fn ldh_n_a(&mut self) {
+    let byte = self.read(self.pc);
+    self.pc += 1;
+    let addr = 0xFF00 + byte as u16;
+    self.write(addr, self.get_a());
+  }
+
+  fn pop_hl(&mut self) {
+    let lo = self.read(self.sp) as u16;
+    self.sp += 1;
+    let hi = self.read(self.sp) as u16;
+    self.sp += 1;
+    let nn = (hi << 8) + lo;
+    self.set_hl(nn);
+  }
+
+  fn ld_mc_a(&mut self) {
+    self.pc += 1;
+    let addr = 0xFF00 + self.get_c() as u16;
+    self.write(addr, self.get_a());
+  }
+
+  fn push_hl(&mut self) {
+    self.sp -= 1;
+    self.write(self.sp, self.get_h());
+    self.sp -= 1;
+    self.write(self.sp, self.get_l());
+  }
+
+  fn and_a_n(&mut self) {
+    let byte = self.read(self.pc);
+    let res = self.get_a() & byte;
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, true);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn rst_20(&mut self) {
+    self.sp -= 1;
+    let hi = (self.pc >> 8) as u8;
+    let lo = (self.pc & 0xFF) as u8;
+    self.write(self.sp, hi);
+    self.sp -= 1;
+    self.write(self.sp, lo);
+    self.pc = 0x20 as u16;
+  }
+
+  fn add_sp_rn(&mut self) {
+    let signed_int = self.read(self.pc);
+    if signed_int > 127 {
+      self.sp += (signed_int & 0x7F) as u16;
+    } else {
+      self.sp -= (signed_int & 0x7F) as u16;
+    }
+  }
+
+  fn jp_hl(&mut self) {
+    self.pc = self.get_hl();
+  }
+
+  fn ld_mnn_a(&mut self) {
+    let hi = self.read(self.pc);
+    self.pc += 1;
+    let lo = self.read(self.pc);
+    self.pc += 1;
+    let addr = (hi << 8 + lo) as u16;
+    self.write(addr, self.get_a());
+  }
+
+  fn xor_a_n(&mut self) {
+    let byte = self.read(self.pc);
+    self.pc += 1;
+    let res = self.get_a() ^ byte;
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn rst_28(&mut self) {
+    self.sp -= 1;
+    let hi = (self.pc >> 8) as u8;
+    let lo = (self.pc & 0xFF) as u8;
+    self.write(self.sp, hi);
+    self.sp -= 1;
+    self.write(self.sp, lo);
+    self.pc = 0x28 as u16;
+  }
+
+  fn ldh_a_n(&mut self) {
+    let byte = self.read(self.pc);
+    self.pc += 1;
+    let addr = 0xFF00 + byte as u16;
+    self.set_a(self.read(addr));
+  }
+
+  fn pop_af(&mut self) {
+    let lo = self.read(self.sp) as u16;
+    self.sp += 1;
+    let hi = self.read(self.sp) as u16;
+    self.sp += 1;
+    let nn = (hi << 8) + lo;
+    self.set_af(nn);
+  }
+
+  fn ld_a_mc(&mut self) {
+    self.pc += 1;
+    let addr = 0xFF00 + self.get_c() as u16;
+    self.set_a(self.read(addr));
+  }
+
+  fn di(&mut self) {
+    self.ime = false;
+  }
+
+  fn push_af(&mut self) {
+    self.sp -= 1;
+    self.write(self.sp, self.get_a());
+    self.sp -= 1;
+    self.write(self.sp, self.get_f());
+  }
+
+  fn or_a_n(&mut self) {
+    let res = self.get_a() | self.read(self.pc);
+    self.pc += 1;
+    self.set_flag(Flag::C, false);
+    self.set_flag(Flag::H, false);
+    self.set_flag(Flag::N, false);
+    self.set_flag(Flag::Z, res == 0);
+    self.set_a(res);
+  }
+
+  fn rst_30(&mut self) {
+    self.sp -= 1;
+    let hi = (self.pc >> 8) as u8;
+    let lo = (self.pc & 0xFF) as u8;
+    self.write(self.sp, hi);
+    self.sp -= 1;
+    self.write(self.sp, lo);
+    self.pc = 0x30 as u16;
+  }
+
+  fn ld_hl_sprn(&mut self) {
+    let signed_int = self.read(self.pc);
+    if signed_int > 127 {
+      self.set_hl(self.sp + (signed_int & 0x7F) as u16);
+    } else {
+      self.set_hl(self.sp - (signed_int & 0x7F) as u16);
+    }
+  }
+
+  fn ld_sp_hl(&mut self) {
+    self.sp = self.get_hl();
+  }
+
+  fn ld_a_mnn(&mut self) {
+    let hi = self.read(self.pc);
+    self.pc += 1;
+    let lo = self.read(self.pc);
+    self.pc += 1;
+    let addr = (hi << 8 + lo) as u16;
+    self.set_a(self.read(addr));
+  }
+
+  fn ei(&mut self) {
+    self.ime = true;
+  }
+
+  fn cp_a_n(&mut self) {
+    let byte = self.read(self.pc);
+    self.pc += 1;
+    let is_half_carry = (((self.get_a() & 0xf) - (byte & 0xf)) & 0x10) != 0;
+    self.set_flag(Flag::C, self.get_a() < byte);
+    self.set_flag(Flag::H, is_half_carry);
+    self.set_flag(Flag::N, true);
+    self.set_flag(Flag::Z, self.get_a() == byte);
+  }
+
+  fn rst_38(&mut self) {
+    self.sp -= 1;
+    let hi = (self.pc >> 8) as u8;
+    let lo = (self.pc & 0xFF) as u8;
+    self.write(self.sp, hi);
+    self.sp -= 1;
+    self.write(self.sp, lo);
+    self.pc = 0x38u16;
   }
 }
 

@@ -2,6 +2,7 @@
 use std::env::args;
 use std::io::prelude::*;
 use std::fs::File;
+use std::{thread, time};
 
 mod display;
 mod cpu;
@@ -46,7 +47,6 @@ impl Gameboy<'_> {
     let game_title = &String::from_utf8(self.game[0x134..0x144].to_vec()).unwrap();
     self.display.set_title(game_title);
 
-    //self.cpu.MEM[0..0x8000] = self.game[..];
   }
 
   fn start(&mut self) {
@@ -54,10 +54,10 @@ impl Gameboy<'_> {
       // FETCH, DEOCDE, EXECUTE
       let opcode = self.cpu.fetch();
       let (duration, op) = self.cpu.decode(opcode);
-      println!("current op duration: {}", duration);
+      println!("current op: {:x}, duration: {}", opcode, duration);
       op(&mut self.cpu);
-
    		self.display.refresh(&e); 
+      thread::sleep(time::Duration::from_millis(500));
     }
   }
 }
@@ -68,10 +68,13 @@ fn main() {
   let mut f = File::open(&file_name).unwrap();
   f.read_to_end(&mut gb.game).unwrap();
 
-  gb.boot_game();
-
   let mut bus = Bus::new();
   gb.cpu.connect_bus(&mut bus);
+  for i in 0..=0x7FFF {
+    let b = gb.game[i]; 
+    gb.cpu.write(i as u16, b); 
+  }
+  gb.boot_game();
 
   gb.start();
 }
